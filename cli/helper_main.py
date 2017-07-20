@@ -5,14 +5,18 @@ import logging
 import logging.config
 import os
 import sys
+import signal
 import shutil
+import socket
 import threading
 import traceback
 import time
 
 import git
+import boto3
 
 from common import toolbar_lib
+from aws_operator import dynamodb
 
 logging.config.fileConfig('etc/helper_logging.conf')
 
@@ -40,7 +44,6 @@ class GitChecker(object):
         """check git repo"""
         while True:
             try:
-                self.update_event.wait(self.git_check_interval)
                 remote = self.git_repo.remote("origin")
                 fetch_result = remote.fetch("--dry-run")
 
@@ -54,6 +57,7 @@ class GitChecker(object):
                 if changed_files:
                     self.copy_file_2_dest(changed_files)
 
+                self.update_event.wait(self.git_check_interval)
                 self.update_event.clear()
             except:
                 logging.error(traceback.format_exc())
@@ -72,8 +76,48 @@ class GitChecker(object):
         threadobj.start()
 
 
+class GroupUpdater(object):
+    """group updater"""
+    def __init__(self, update_interval):
+        self.dynamodb = boto3.client("dynamodb")
+        self.update_interval = update_interval
+        self.hostname = socket.gethostname()
+        self.status = "bootstrap"
+
+    def update(self):
+        """update ec2 worker group status"""
+        while True:
+            try:
+                current_time = time.time().__trunc__()
+                if self.status == "bootstrap":
+                    dynamodb.updategroup(self.dynamodb, current_time,
+                                         self.hostname, "ec2", "enable")
+                    self.status = "registed"
+                else:
+                    dynamodb.updategroup(self.dynamodb, current_time,
+                                         self.hostname, "ec2", "")
+                time.sleep(self.update_interval)
+            except:
+                logging.warn(traceback.format_exc())
+
+    def run(self):
+        """start the groupupdater"""
+        threadobj = threading.Thread(target=self.update)
+        threadobj.daemon = True
+        threadobj.start()
+
+
+QUIT_EVENT = threading.Event()
+def signal_handler(signum, frame):
+    """handle signals"""
+    global QUIT_EVENT
+    logging.info("Signal handler called with signal %s", signum)
+    QUIT_EVENT.set()
+
+
 def main():
     """helper"""
+    global QUIT_EVENT
     #read command params
     config_file = toolbar_lib.check_para(sys.argv, "f", "etc/helper.ini")
     #read config
@@ -85,12 +129,21 @@ def main():
     git_cache = config.get("git", "cache")
     git_dest = config.get("git", "dest")
     git_check_interval = config.getint("git", "check_interval")
-
     git_checker = GitChecker(git_url, git_branch, git_cache, git_dest,
                              git_check_interval)
     git_checker.run()
 
-    time.sleep(5)
+    group_update_interval = config.getint("group", "update_interval")
+    group_updater = GroupUpdater(group_update_interval)
+    group_updater.run()
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    while True:
+        logging.info("helper_main running......")
+        QUIT_EVENT.wait(300)
+        if QUIT_EVENT.isSet():
+            return
 
 
 if __name__ == "__main__":

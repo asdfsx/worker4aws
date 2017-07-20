@@ -5,8 +5,8 @@ import traceback
 
 import boto3
 
-table_list      = [{# job list
-                    "table_name"     : "JobScheuler",
+table_list      = [# job list
+                   {"table_name"     : "JobScheuler",
                     "key_schema"     : [{"AttributeName"       : "Jobid", 
                                          "KeyType"             : "HASH"},],
                     "table_attr"     : [{"AttributeName"       : "Jobid", 
@@ -41,7 +41,27 @@ table_list      = [{# job list
                         "Workerjob"     : {"S": "example"},
                         "Updatetime"    : {"N": str(time.time().__trunc__())},
                         "ExpirationTime": {"N": str(time.time().__trunc__() + 300)},},
+                    "provisioned_throughput" : {
+                        "ReadCapacityUnits"  : 10,
+                        "WriteCapacityUnits" : 10},
+                    "stream_specification"   : {
+                        "StreamEnabled"      : False},
+                    "ttlSpecification"       : {
+                        'Enabled': True,
+                        'AttributeName': 'ExpirationTime'},},
 
+                   # worker group
+                   {"table_name"    : "JobWorkerGroup",
+                    "key_schema"    : [{"AttributeName"       : "Groupid",
+                                        "KeyType"             : "HASH"},],
+                    "table_attr"     : [{"AttributeName"       : "Groupid",
+                                         "AttributeType"       : "S"},],
+                    "table_schema"  : {
+                        "Groupid"      : {"S": "1.1.1.1"},
+                        "Grouptype"    : {"S": "ec2"},       # ec2|other
+                        "Groupstatus"  : {"S": "enable"},    # enable|disable
+                        "Updatetime"    : {"N": str(time.time().__trunc__())},
+                        "ExpirationTime": {"N": str(time.time().__trunc__() + 300)},},
                     "provisioned_throughput" : {
                         "ReadCapacityUnits"  : 10,
                         "WriteCapacityUnits" : 10},

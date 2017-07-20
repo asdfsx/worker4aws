@@ -24,6 +24,35 @@ def updateworker(client, current_time, worker_id, worker_status, worker_job):
         UpdateExpression='SET #ws = :ws, #wj = :wj, #ut = :ut, #et = :et',
     )
 
+
+def checkgroup(client, groupid):
+    """check group status by groupid"""
+
+
+def updategroup(client, current_time, group_id, group_type, group_status):
+    """update group status"""
+    expression_attributenames = {"#gt": "Grouptype",
+                                 "#ut": "Updatetime",
+                                 "#et": "ExpirationTime",}
+    expression_attributevalues = {":gt": {"S" : group_type},
+                                  ":ut": {"N" : str(current_time)},
+                                  ":et": {"N" : str(current_time + 600)},}
+    update_expression = 'SET #gt = :gt, #ut = :ut, #et = :et'
+    if group_status != "":
+        expression_attributenames["#gs"] = "Groupstatus"
+        expression_attributevalues[":gs"] = {"S" : group_status}
+        update_expression = 'SET #gt = :gt, #gs = :gs, #ut = :ut, #et = :et'
+
+    client.update_item(
+        ExpressionAttributeNames=expression_attributenames,
+        ExpressionAttributeValues=expression_attributevalues,
+        Key={"Groupid": {"S": group_id},},
+        ReturnValues='NONE',
+        TableName="JobWorkerGroup",
+        UpdateExpression=update_expression,
+    )
+
+
 def updatejobstage(client, job_id, old_job_stage, new_job_stage):
     """update job stage
     """
