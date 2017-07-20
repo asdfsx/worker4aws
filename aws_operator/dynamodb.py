@@ -25,8 +25,17 @@ def updateworker(client, current_time, worker_id, worker_status, worker_job):
     )
 
 
-def checkgroup(client, groupid):
+def checkgroupstatus(client, groupid):
     """check group status by groupid"""
+    result = client.get_item(
+        TableName='JobWorkerGroup',
+        Key={"Groupid" : {"S" : groupid}},
+    )
+    if "Item" in result and "Groupstatus" in result["Item"]:
+        return result["Item"]["Groupstatus"]["S"]
+    else:
+        return ""
+
 
 
 def updategroup(client, current_time, group_id, group_type, group_status):

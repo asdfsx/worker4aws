@@ -57,6 +57,7 @@ class Worker(object):
         self.worker_id = "worker%02d@%s" % (self.pid, self.hostname)
         self.worker_status = "idle" # idle|busy
         self.worker_job = "null"    # null|{job_id}
+        self.group_status = ""
         self.worker_heartbeat_interval = 60
         self.sqs_visibility_interval = 60
         self.sqs_visibility_timeout = 90
@@ -67,7 +68,6 @@ class Worker(object):
         self.receipt_handle = ""
         self.observer = None
         self.code_update_handler = None
-        self.updatecode = {}
 
         self.dynamo_client = boto3.client("dynamodb")
         self.sqs_client = boto3.client("sqs")
@@ -142,13 +142,17 @@ class Worker(object):
 
     def worker_monitor(self):
         """update worker status into dynamodb
+        query worker groups status at the same time
         """
         while True:
             try:
-                self.worker_monitor_event.wait(self.worker_heartbeat_interval)
                 current_time = time.time().__trunc__()
                 dynamodb.updateworker(self.dynamo_client, current_time, self.worker_id,
                                       self.worker_status, self.worker_job)
+
+                self.group_status = dynamodb.checkgroupstatus(self.dynamo_client, self.hostname)
+
+                self.worker_monitor_event.wait(self.worker_heartbeat_interval)
                 self.worker_monitor_event.clear()
             except:
                 logging.warn(traceback.format_exc())
@@ -161,11 +165,12 @@ class Worker(object):
         """
         while True:
             try:
-                self.sqs_monitor_event.wait(timeout=self.sqs_visibility_interval)
                 if self.receipt_handle:
                     sqs.change_message_visibility(self.sqs_client, self.queue_url,
                                                   self.receipt_handle,
                                                   self.sqs_visibility_interval + 30)
+
+                self.sqs_monitor_event.wait(timeout=self.sqs_visibility_interval)
                 self.sqs_monitor_event.clear()
             except:
                 logging.warn(traceback.format_exc())
@@ -257,8 +262,6 @@ class Worker(object):
         """
         while True:
             try:
-                time.sleep(10)
-
                 if self.quit_flag:
                     return
 
@@ -269,34 +272,39 @@ class Worker(object):
                 self.update_module()
 
                 # read sqs
-                messages = sqs.receive_message(self.sqs_client, self.worker_id, self.queue_url)
                 jobs = []
-                if "Messages" in messages:
-                    for message in messages["Messages"]:
-                        msg_id = message["MessageId"]
-                        msg_handle = message["ReceiptHandle"]
-                        job_body = json.loads(message["Body"])
-                        jobs.append((msg_id, msg_handle, job_body))
+                if self.group_status == "enable":
+                    messages = sqs.receive_message(self.sqs_client, self.worker_id, self.queue_url)
+                    if "Messages" in messages:
+                        for message in messages["Messages"]:
+                            msg_id = message["MessageId"]
+                            msg_handle = message["ReceiptHandle"]
+                            job_body = json.loads(message["Body"])
+                            jobs.append((msg_id, msg_handle, job_body))
 
-                # execute jobs
-                for (msg_id, msg_handle, job_body) in jobs:
-                    # update worker status using thread
-                    self.worker_job = job_body["Jobid"]
-                    self.worker_status = "busy"
-                    self.worker_monitor_event.set()
+                    # execute jobs
+                    for (msg_id, msg_handle, job_body) in jobs:
+                        # update worker status using thread
+                        self.worker_job = job_body["Jobid"]
+                        self.worker_status = "busy"
+                        self.worker_monitor_event.set()
 
-                    # update visibility timeout using thread
-                    self.receipt_handle = msg_handle
-                    self.sqs_monitor_event.set()
+                        # update visibility timeout using thread
+                        self.receipt_handle = msg_handle
+                        self.sqs_monitor_event.set()
 
-                    is_ok = self.execute(job_body)
+                        is_ok = self.execute(job_body)
 
-                    if is_ok:
-                        sqs.delete_message(self.sqs_client, self.queue_url, msg_handle)
-                        
+                        if is_ok:
+                            sqs.delete_message(self.sqs_client, self.queue_url, msg_handle)
+                else:
+                    logging.info("group %s disabled", self.hostname)
+
                 self.worker_status = "idle"
                 self.worker_job = "null"
                 self.receipt_handle = ""
+
+                time.sleep(10)
             except:
                 logging.warn(traceback.format_exc())
 
