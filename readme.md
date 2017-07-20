@@ -11,7 +11,7 @@
 
 将 modules 从主项目分离：  
 * 建立单独的 git 项目对modules进行管理
-* 使用 submodule 将该项目关联到主项目
+* 使用 submodule 将该项目关联到主项目
 
 新增 cli/helper_main.py
 * 监控指定 modules 项目的代码。  
@@ -20,4 +20,4 @@
 修改 cli/worker_main.py
 * 使用 watchdog 监控 modules 目录，当文件更新时，通知程序重新加载模块代码
 * 任务处理失败时 dynamodb 中的 jobstage 改为 failed 状态
-* 增加 sqs 中可视时间的更新
+* 增加 sqs 中可视时间的更新
