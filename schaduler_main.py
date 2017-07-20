@@ -35,10 +35,10 @@ def main():
                                      QueueOwnerAWSAccountId=account_id)
 
     dynamodb = boto3.client("dynamodb")
-    add_job(dynamodb, "example", "example", {"module_name"  : {"S": "example"},
+    add_job(dynamodb, "example", "example", {"module_name"  : {"S": "command"},
                                              "class_name"   : {"S": "none"},
-                                             "handler_name" : {"S": "run"}},
-            {"message"      : {"S": "sdfhello!!!"}}, queue_url["QueueUrl"])
+                                             "handler_name" : {"S": "simple_run"}},
+            {"cmd"      : {"S": "ls -1"}}, queue_url["QueueUrl"])
 
 
 if __name__ == "__main__":
