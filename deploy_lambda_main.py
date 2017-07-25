@@ -9,6 +9,9 @@ from string import Template
 import boto3
 import json
 
+# default_region  = "us-west-2" # US West (Oregon)
+default_region  = "ap-northeast-1" # Asia Pacific (Tokyo)
+
 lambda_file      = "lambda/lambda.py"
 zip_file         = "lambda/lambda.zip"
 
@@ -88,7 +91,7 @@ policy_template = Template("""{
 
 def create_lambda_role():
     global role_name
-    client = boto3.client("iam")
+    client = boto3.client("iam", region_name=default_region)
     # 查询 role 是否存在
     roleobj = None
     try:
@@ -126,7 +129,7 @@ def add_policy(accountid):
     global function_name
     global region
 
-    client = boto3.client("iam")
+    client = boto3.client("iam", region_name=default_region)
     # 添加 policy
     policy_template.substitute(
         accountid=accountid,
@@ -172,11 +175,11 @@ def deploy_lambda():
         return
 
     # 查找 role
-    client = boto3.client("iam")
+    client = boto3.client("iam", region_name=default_region)
     roleobj = client.get_role(RoleName=role_name)
 
     # 添加 lambda
-    client = boto3.client("lambda")
+    client = boto3.client("lambda", region_name=default_region)
 
     # 查询 lambda 是否存在
     lambdaobj = None
@@ -206,7 +209,7 @@ def create_lambda_mapping():
     global function_name
     global table_name
 
-    client = boto3.client("dynamodb")
+    client = boto3.client("dynamodb", region_name=default_region)
     tableobj = None
     try:
         tableobj = client.describe_table(TableName=table_name)
@@ -214,7 +217,7 @@ def create_lambda_mapping():
         print traceback.format_exc()
 
 
-    client = boto3.client("lambda")
+    client = boto3.client("lambda", region_name=default_region)
     # 检查映射是否创建
     mappings = client.list_event_source_mappings(
         EventSourceArn=tableobj["Table"]["LatestStreamArn"],
@@ -238,7 +241,7 @@ def create_s3_bucket_mapping(accountid):
     global function_name
     global bucket_name
 
-    client = boto3.client("lambda")
+    client = boto3.client("lambda", region_name=default_region)
     lambdaobj = client.get_function(FunctionName=function_name)
 
     try:
@@ -255,7 +258,7 @@ def create_s3_bucket_mapping(accountid):
     except:
         print traceback.format_exc()
 
-    client = boto3.client("s3")
+    client = boto3.client("s3", region_name=default_region)
     mapping = client.put_bucket_notification_configuration(
         Bucket=bucket_name,
         NotificationConfiguration={
@@ -277,10 +280,10 @@ def create_apigateway(accountid):
     global region
 
     # 查找 role
-    client = boto3.client("iam")
+    client = boto3.client("iam", region_name=default_region)
     roleobj = client.get_role(RoleName=role_name)
 
-    client = boto3.client("apigateway")
+    client = boto3.client("apigateway", region_name=default_region)
 
     response = client.get_rest_apis()
     api_id = ""
@@ -362,7 +365,7 @@ def create_apigateway_mapping(accountid):
     global api
     global region
 
-    client = boto3.client("apigateway")
+    client = boto3.client("apigateway", region_name=default_region)
 
     response = client.get_rest_apis()
     api_id = ""
@@ -371,7 +374,7 @@ def create_apigateway_mapping(accountid):
             if tmp["name"] == api["name"]:
                 api_id = tmp["id"]
 
-    client = boto3.client("lambda")
+    client = boto3.client("lambda", region_name=default_region)
     lambdaobj = client.get_function(FunctionName=function_name)
 
     source_arn_template = Template(
@@ -405,7 +408,7 @@ def create_apigateway_mapping(accountid):
 
 
 def main():
-    sts = boto3.client("sts")
+    sts = boto3.client("sts", region_name=default_region)
     accountid = sts.get_caller_identity()["Account"]
 
     roleobj = create_lambda_role()

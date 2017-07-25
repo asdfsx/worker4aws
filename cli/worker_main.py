@@ -69,9 +69,10 @@ class Worker(object):
         self.receipt_handle = ""
         self.observer = None
         self.code_update_handler = None
+        self.default_region = "us-west-2"
 
-        self.dynamo_client = boto3.client("dynamodb")
-        self.sqs_client = boto3.client("sqs")
+        self.dynamo_client = None boto3.client("dynamodb")
+        self.sqs_client = None boto3.client("sqs")
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -116,10 +117,15 @@ class Worker(object):
         self.worker_heartbeat_interval = config.getint("worker", "heartbeat_interval")
         self.sqs_visibility_interval = config.getint("worker", "sqs_visibility_interval")
         self.config_read_interval = config.getint("worker", "config_read_interval")
+        self.default_region = config.get("worker", "default_region")
+
+        self.dynamo_client = boto3.client("dynamodb", region_name=self.default_region)
+        self.sqs_client = boto3.client("sqs", region_name=self.default_region)
+        self.sts_client = boto3.client("sts", region_name=self.default_region)
 
         self.sqs_visibility_timeout = self.sqs_visibility_interval + 30
 
-        self.aws_account_id = sts.get_account_id()
+        self.aws_account_id = sts.get_account_id(self.sts_client)
         self.queue_url = sqs.get_queue_url(self.sqs_client, self.sqs_name, self.aws_account_id)
 
         new_module_path = config.get("worker", "module_path")

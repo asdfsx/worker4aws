@@ -5,6 +5,9 @@ import traceback
 
 import boto3
 
+# default_region  = "us-west-2" # US West (Oregon)
+default_region  = "ap-northeast-1" # Asia Pacific (Tokyo)
+
 table_list      = [# job list
                    {"table_name"     : "JobScheuler",
                     "key_schema"     : [{"AttributeName"       : "Jobid", 
@@ -106,8 +109,9 @@ auto_scaling_launch_config = {
 def create_dynamo_table(queue_url):
     """"create dynamo table"""
     global table_list
+    global default_region
 
-    client = boto3.client("dynamodb")
+    client = boto3.client("dynamodb", region_name=default_region)
 
     for table_desc in table_list:
         # check if dynamodb is exists
@@ -158,7 +162,7 @@ def create_sqs():
     global queue_policy
 
     queue_url = None
-    client = boto3.client("sqs")
+    client = boto3.client("sqs", region_name=default_region)
 
     # check whether the queue exists
     try:
@@ -185,7 +189,7 @@ def create_s3_bucket():
     global bucket_region
 
     bucket_meta = None
-    client = boto3.client("s3")
+    client = boto3.client("s3", region_name=default_region)
 
     try:
         bucket_meta = client.head_bucket(Bucket=bucket_name)
@@ -204,7 +208,7 @@ def create_s3_bucket():
 
 
 def create_auto_scaling():
-    client = boto3.client("autoscaling")
+    client = boto3.client("autoscaling", region_name=default_region)
     result = {}
 
     launch_configure = client.describe_launch_configurations(
@@ -290,7 +294,7 @@ def create_auto_scaling():
 
 def create_cloud_watch(alarm_name, comparison_operator, threshold, actions):
     """create a sqs monitor and trigger autoscalling"""
-    client = boto3.client('cloudwatch')
+    client = boto3.client('cloudwatch', region_name=default_region)
     result = client.put_metric_alarm(
         AlarmName=alarm_name,
         ComparisonOperator=comparison_operator,
@@ -314,7 +318,7 @@ def create_cloud_watch(alarm_name, comparison_operator, threshold, actions):
 
 
 def main():
-    sts = boto3.client("sts")
+    sts = boto3.client("sts", region_name=default_region)
     accountid = sts.get_caller_identity()["Account"]
 
     queue_url = create_sqs()

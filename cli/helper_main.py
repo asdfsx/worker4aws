@@ -78,9 +78,10 @@ class GitChecker(object):
 
 class GroupUpdater(object):
     """group updater"""
-    def __init__(self, update_interval):
-        self.dynamodb = boto3.client("dynamodb")
+    def __init__(self, default_region, update_interval):
+        self.default_region = default_region
         self.update_interval = update_interval
+        self.dynamodb = boto3.client("dynamodb", region_name=self.default_region)
         self.hostname = socket.gethostname()
         self.status = "bootstrap"
 
@@ -124,6 +125,7 @@ def main():
     config = ConfigParser.ConfigParser()
     config.read(config_file)
 
+    default_region = config.get("helper", "default_region")
     git_url = config.get("git", "url")
     git_branch = config.get("git", "branch")
     git_cache = config.get("git", "cache")
@@ -134,7 +136,7 @@ def main():
     git_checker.run()
 
     group_update_interval = config.getint("group", "update_interval")
-    group_updater = GroupUpdater(group_update_interval)
+    group_updater = GroupUpdater(default_region, group_update_interval)
     group_updater.run()
 
     signal.signal(signal.SIGINT, signal_handler)

@@ -1,9 +1,7 @@
 import boto3
 
-sts_client = boto3.client("sts")
-
-def get_account_id():
+def get_account_id(client):
     """get aws account id
     """
-    accountid = sts_client.get_caller_identity()["Account"]
+    accountid = client.get_caller_identity()["Account"]
     return accountid
