@@ -14,11 +14,14 @@ def handler(event, context):
     # Your code goes here!
     print event
 
-    for record in event["Records"]:
-        if record["eventSource"] == "aws:dynamodb":
-            handle_dynamodb(record, context)
-        elif record["eventSource"] == "aws:s3":
-            handle_s3(record, context)
+    if "Records" in event:
+        for record in event["Records"]:
+            if record["eventSource"] == "aws:dynamodb":
+                handle_dynamodb(record, context)
+            elif record["eventSource"] == "aws:s3":
+                handle_s3(record, context)
+    elif "body" in event and "httpMethod" in event and "path" in event:
+        handle_apigateway(event, context)
 
 
 def handle_s3(record, context):
@@ -97,3 +100,69 @@ def handle_dynamodb(record, context):
                 pass
     except:
         print traceback.format_exc()
+
+
+def handle_apigateway(event, context):
+    """create job from apigateway
+    receive a json, then create dynamodb record
+    json example:
+    {"job_name":"apigateway",
+     "job_desc":"apigateway testing",
+     "job_param":{"msg":{"S":"hello api"}},
+     "job_queue":"",
+     "exec_module":"example",
+     "exec_class":"none",
+     "exec_handler":"run"}
+    test the example in apigateway:
+    copy the json into the apigateway test page
+    """
+    global queue_name
+    global table_name
+
+    sqs = boto3.client("sqs")
+    queue_url = None
+    try:
+        response = sqs.get_queue_url(
+            QueueName=queue_name,
+        )
+        queue_url = response["QueueUrl"]
+    except:
+        print traceback.format_exc()
+
+    if event["httpMethod"] != "POST" or event["path"] != "/jobs":
+        return ""
+
+    sqs = boto3.client("sqs")
+    queue_url = None
+    try:
+        response = sqs.get_queue_url(
+            QueueName=queue_name,
+        )
+        queue_url = response["QueueUrl"]
+    except:
+        print traceback.format_exc()
+
+    body = json.loads(event["body"])
+    jobid       = str(time.time() * 1000000)
+    jobname     = body["job_name"]
+    jobdesc     = body["job_desc"]
+    jobparam    = body["job_param"]
+    jobqueue    = body["job_queue"] and body["job_queue"] or queue_url
+    jobexecutor = {"module_name"  : {"S": body["exec_module"]},
+                   "class_name"   : {"S": body["exec_class"]},
+                   "handler_name" : {"S": body["exec_handler"]},}
+    jobstage    = "create"
+
+    client      = boto3.client("dynamodb")
+    result      = client.put_item(
+        TableName=table_name,
+        Item={
+            "Jobid"       : {"S" : jobid},
+            "Jobname"     : {"S" : jobname},
+            "Jobdesc"     : {"S" : jobdesc},
+            "Jobexecutor" : {"M" : jobexecutor},
+            "Jobparam"    : {"M" : jobparam},
+            "Jobqueue"    : {"S" : jobqueue},
+            "Jobstage"    : {"S" : jobstage},
+        }
+    )

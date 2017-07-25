@@ -62,14 +62,16 @@ def updategroup(client, current_time, group_id, group_type, group_status):
     )
 
 
-def updatejobstage(client, job_id, old_job_stage, new_job_stage):
+def updatejobstage(client, job_id, old_job_stage, new_job_stage, job_result):
     """update job stage
     """
     condition_expression="#js = :ojs"
     expression_attribute_values = {":ojs": {"S" : old_job_stage},
-                                   ":njs": {"S" : new_job_stage},}
+                                   ":njs": {"S" : new_job_stage},
+                                   ":jr" : {"S" : job_result},}
     if isinstance(old_job_stage, types.ListType):
-        expression_attribute_values = {":njs": {"S" : new_job_stage},}
+        expression_attribute_values = {":njs": {"S" : new_job_stage},
+                                       ":jr" : {"S" : job_result},}
         for index, stage in enumerate(old_job_stage):
             key = ":ojs%02d" % index
             expression_attribute_values[key] = {"S" : stage}
@@ -80,11 +82,21 @@ def updatejobstage(client, job_id, old_job_stage, new_job_stage):
 
     client.update_item(
         ExpressionAttributeNames={
-            "#js": "Jobstage",},
+            "#js": "Jobstage",
+            "#jr": "Jobresult",},
         ExpressionAttributeValues=expression_attribute_values,
         Key={"Jobid": {"S": job_id},},
         ReturnValues='NONE',
         TableName="JobScheuler",
         ConditionExpression=condition_expression,
-        UpdateExpression="SET #js = :njs",
+        UpdateExpression="SET #js = :njs, #jr = :jr",
     )
+
+def getjobbyid(client, job_id):
+    """check whether job_id exists"""
+    result = client.get_item(TableName="JobScheuler",
+                             Key={"Jobid": {"S": job_id},},)
+    if "Item" in result:
+        return result["Item"]
+    else:
+        return None

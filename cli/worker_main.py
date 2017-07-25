@@ -24,6 +24,7 @@ from aws_operator import sts
 logging.config.fileConfig('etc/worker_logging.conf')
 
 class CodeChangeHandler(FileSystemEventHandler):
+    """code change handler"""
     def __init__(self):
         super(CodeChangeHandler, self).__init__()
         self.codechanged = {}
@@ -86,7 +87,6 @@ class Worker(object):
 
         self.code_update_handler = CodeChangeHandler()
         self.observer = Observer()
-        
         self.observer.start()
 
         self.main_stream_eveent = threading.Event()
@@ -177,6 +177,7 @@ class Worker(object):
 
 
     def update_module(self):
+        """auto update modules"""
         if self.code_update_handler.codechanged:
             with self.code_update_handler.rlock:
                 for changed in self.code_update_handler.codechanged:
@@ -206,13 +207,20 @@ class Worker(object):
             jobexec = job["Jobexec"]
             jobstage = job["Jobstage"]
 
-            # query dynamodb for more job details if needed
+            failed_reason = ""
 
-            # before exeute the job update the stage
+            # query dynamodb for more job details to check if the job exists
+            # if exists execute, if not return True
+            job = dynamodb.getjobbyid(self.dynamo_client, jobid)
+            if job is None:
+                logging.info("Job ID(%s) doesn't exist in dynamodb", jobid)
+                return True
+
+            # before execute the job update the stage
             # hope this can prevent other worker to run the same job
             try:
                 dynamodb.updatejobstage(self.dynamo_client, jobid,
-                                        ["create", "failed"], "running")
+                                        ["create", "failed"], "running", "running")
             except:
                 logging.warn(traceback.format_exc())
                 return False
@@ -222,9 +230,17 @@ class Worker(object):
             handler_name = "handler_name" in jobexec and jobexec["handler_name"]["S"] or None
 
             if module_name is None:
+                failed_reason = "job param invalid: missing param module_name"
+                logging.info("Job ID(%s) failed, cause %s", jobid, failed_reason)
+                dynamodb.updatejobstage(self.dynamo_client,
+                                        self.worker_job, "running", "failed", failed_reason)
                 return False
 
             if handler_name is None:
+                failed_reason = "job param invalid: missing param handler_name"
+                logging.info("Job ID(%s) failed, cause %s", jobid, failed_reason)
+                dynamodb.updatejobstage(self.dynamo_client,
+                                        self.worker_job, "running", "failed", failed_reason)
                 return False
 
             if module_name in sys.modules:
@@ -237,7 +253,7 @@ class Worker(object):
                     handler = getattr(module_obj, handler_name)
                     handler(jobid, jobparam)
                     dynamodb.updatejobstage(self.dynamo_client,
-                                            self.worker_job, "running", "finish")
+                                            self.worker_job, "running", "finish", "success")
                     return True
             else:
                 if hasattr(module_obj, class_name):
@@ -247,14 +263,13 @@ class Worker(object):
                         handler = getattr(obj_obj, handler_name)
                         handler(jobid, jobparam)
                         dynamodb.updatejobstage(self.dynamo_client,
-                                                self.worker_job, "running", "finish")
+                                                self.worker_job, "running", "finish", "success")
                     return True
         except:
             logging.warn(traceback.format_exc())
-            
-        dynamodb.updatejobstage(self.dynamo_client,
-                                self.worker_job, "running", "failed")
-        return False
+            dynamodb.updatejobstage(self.dynamo_client,
+                                    self.worker_job, "running", "failed", traceback.format_exc())
+            return False
 
 
     def run(self):
@@ -293,10 +308,9 @@ class Worker(object):
                         self.receipt_handle = msg_handle
                         self.sqs_monitor_event.set()
 
-                        is_ok = self.execute(job_body)
+                        self.execute(job_body)
 
-                        if is_ok:
-                            sqs.delete_message(self.sqs_client, self.queue_url, msg_handle)
+                        sqs.delete_message(self.sqs_client, self.queue_url, msg_handle)
                 else:
                     logging.info("group %s disabled", self.hostname)
 

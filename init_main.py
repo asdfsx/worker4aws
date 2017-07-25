@@ -20,7 +20,8 @@ table_list      = [# job list
                                                 "handler_name" : {"S": "run"}}},
                         "Jobparam"    : {"M" : {"message"      : {"S": "hello!!!"}}},
                         "Jobqueue"    : {"S" : "example"},
-                        "Jobstage"    : {"S" : "finish"},},
+                        "Jobstage"    : {"S" : "finish"},
+                        "Jobresult"   : {"S" : "success"},},
                     "provisioned_throughput" : {
                         "ReadCapacityUnits"  : 10,
                         "WriteCapacityUnits" : 10},
