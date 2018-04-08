@@ -71,8 +71,8 @@ class Worker(object):
         self.code_update_handler = None
         self.default_region = "us-west-2"
 
-        self.dynamo_client = None boto3.client("dynamodb")
-        self.sqs_client = None boto3.client("sqs")
+        self.dynamo_client = None
+        self.sqs_client = None
 
         signal.signal(signal.SIGINT, self.signal_handler)
 

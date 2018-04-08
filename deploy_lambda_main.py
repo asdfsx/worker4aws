@@ -9,8 +9,8 @@ from string import Template
 import boto3
 import json
 
-# default_region  = "us-west-2" # US West (Oregon)
-default_region  = "ap-northeast-1" # Asia Pacific (Tokyo)
+default_region  = "us-west-2" # US West (Oregon)
+# default_region  = "ap-northeast-1" # Asia Pacific (Tokyo)
 
 lambda_file      = "lambda/lambda.py"
 zip_file         = "lambda/lambda.zip"
@@ -24,6 +24,7 @@ handler          = "lambda.handler"
 
 table_name       = "JobScheuler"
 region           = "us-west-2"
+# region           = "ap-northeast-1"
 
 bucket_name      = "boto3s3example"
 
@@ -189,7 +190,7 @@ def deploy_lambda():
         )
     except:
         print traceback.format_exc()
-
+    print roleobj["Role"]["Arn"]
     if lambdaobj is None:
         newlambda = client.create_function(
             FunctionName=function_name,
@@ -257,13 +258,14 @@ def create_s3_bucket_mapping(accountid):
         print permission
     except:
         print traceback.format_exc()
-
+    print lambdaobj["Configuration"]["FunctionArn"]
     client = boto3.client("s3", region_name=default_region)
     mapping = client.put_bucket_notification_configuration(
         Bucket=bucket_name,
         NotificationConfiguration={
             "LambdaFunctionConfigurations": [
                 {
+                    "Id" : "lambdas3example",
                     "LambdaFunctionArn" : lambdaobj["Configuration"]["FunctionArn"],
                     "Events": ["s3:ObjectCreated:*"],
                 }
@@ -417,7 +419,7 @@ def main():
     preparehandler()
 
     deploy_lambda()
-    
+
     create_lambda_mapping()
     create_s3_bucket_mapping(accountid)
     cleanhandler()
